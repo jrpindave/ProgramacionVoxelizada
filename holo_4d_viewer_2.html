@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Holo 4D · Vista Voxel</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0d0f12;
+    --bg2: #13161b;
+    --bg3: #1c2029;
+    --border: rgba(255,255,255,0.07);
+    --border2: rgba(255,255,255,0.13);
+    --text: #e8eaf0;
+    --text2: #7c8494;
+    --text3: #4a5060;
+    --green: #3B6D11;
+    --green-l: #97C459;
+    --amber: #BA7517;
+    --amber-l: #EF9F27;
+    --red: #A32D2D;
+    --red-l: #E24B4A;
+    --gray: #3a3f4a;
+    --gray-l: #7c8494;
+    --blue: #185FA5;
+    --blue-l: #378ADD;
+    --accent: #378ADD;
+  }
+
+  html, body { width: 100%; height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; }
+
+  #app { display: flex; flex-direction: column; width: 100%; height: 100%; }
+
+  /* TOOLBAR */
+  #toolbar {
+    display: flex; align-items: center; gap: 20px;
+    padding: 0 20px; height: 48px; flex-shrink: 0;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg2);
+  }
+  .tb-logo { font-family: 'DM Mono', monospace; font-size: 13px; font-weight: 500; color: var(--text); letter-spacing: 0.06em; }
+  .tb-logo span { color: var(--accent); }
+  .sep { width: 1px; height: 20px; background: var(--border2); }
+  .tb-label { font-size: 11px; color: var(--text2); letter-spacing: 0.05em; text-transform: uppercase; }
+
+  #week-slider {
+    -webkit-appearance: none; appearance: none;
+    width: 160px; height: 3px; border-radius: 2px;
+    background: var(--bg3); outline: none; cursor: pointer;
+  }
+  #week-slider::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 14px; height: 14px; border-radius: 50%;
+    background: var(--accent); cursor: pointer;
+    border: 2px solid var(--bg2);
+    transition: transform 0.15s;
+  }
+  #week-slider::-webkit-slider-thumb:hover { transform: scale(1.2); }
+  #week-val { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--text); min-width: 56px; }
+
+  .legend { display: flex; gap: 14px; margin-left: auto; align-items: center; }
+  .leg-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text2); }
+  .leg-dot { width: 8px; height: 8px; border-radius: 2px; }
+
+  /* MAIN */
+  #main { display: flex; flex: 1; overflow: hidden; }
+  #canvas-wrap { flex: 1; position: relative; }
+  canvas { width: 100% !important; height: 100% !important; display: block; }
+
+  #hint {
+    position: absolute; bottom: 14px; left: 14px;
+    font-size: 11px; color: var(--text3); pointer-events: none;
+    font-family: 'DM Mono', monospace; letter-spacing: 0.02em;
+  }
+
+  /* STATS BAR */
+  #stats-bar {
+    position: absolute; top: 12px; left: 12px;
+    display: flex; gap: 8px;
+  }
+  .stat-chip {
+    display: flex; align-items: center; gap: 5px;
+    padding: 5px 10px; border-radius: 6px;
+    font-family: 'DM Mono', monospace; font-size: 11px;
+    background: var(--bg2); border: 1px solid var(--border);
+  }
+  .stat-chip .dot { width: 6px; height: 6px; border-radius: 50%; }
+  .stat-chip .val { font-weight: 500; color: var(--text); }
+  .stat-chip .lbl { color: var(--text2); }
+
+  /* SIDE PANEL */
+  #panel {
+    width: 240px; border-left: 1px solid var(--border);
+    background: var(--bg2); display: flex; flex-direction: column;
+    flex-shrink: 0; overflow: hidden;
+  }
+  #panel-header {
+    padding: 14px 16px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  #panel-id {
+    font-family: 'DM Mono', monospace; font-size: 10px;
+    color: var(--accent); letter-spacing: 0.08em; margin-bottom: 4px;
+    text-transform: uppercase;
+  }
+  #panel-title { font-size: 15px; font-weight: 500; color: var(--text); }
+  #panel-pct { font-size: 12px; color: var(--text2); margin-top: 2px; }
+
+  #panel-body { flex: 1; overflow-y: auto; padding: 12px 16px; }
+  #panel-body::-webkit-scrollbar { width: 3px; }
+  #panel-body::-webkit-scrollbar-track { background: transparent; }
+  #panel-body::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+  .row-section { margin-bottom: 12px; }
+  .row-label {
+    font-size: 9px; color: var(--text3); text-transform: uppercase;
+    letter-spacing: 0.08em; margin-bottom: 4px;
+    font-family: 'DM Mono', monospace;
+  }
+  .cube-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px; }
+  .cube-cell {
+    border-radius: 4px; padding: 4px 3px;
+    font-size: 8.5px; line-height: 1.25; text-align: center;
+    cursor: default; transition: filter 0.15s;
+  }
+  .cube-cell:hover { filter: brightness(1.15); }
+
+  #panel-footer {
+    padding: 12px 16px; border-top: 1px solid var(--border);
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px;
+  }
+  .ft-stat {
+    text-align: center; padding: 6px 4px; border-radius: 5px;
+    font-family: 'DM Mono', monospace;
+  }
+  .ft-stat .n { font-size: 15px; font-weight: 500; display: block; }
+  .ft-stat .l { font-size: 9px; display: block; margin-top: 1px; }
+
+  #panel-empty {
+    flex: 1; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 8px;
+    padding: 20px; text-align: center;
+  }
+  #panel-empty .icon { font-size: 28px; color: var(--text3); }
+  #panel-empty p { font-size: 12px; color: var(--text2); line-height: 1.5; }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <div id="toolbar">
+    <div class="tb-logo">HOLO <span>4D</span></div>
+    <div class="sep"></div>
+    <span class="tb-label">Semana</span>
+    <input type="range" id="week-slider" min="1" max="32" value="14" step="1">
+    <span id="week-val" style="font-family:'DM Mono',monospace;font-size:12px;min-width:56px;color:var(--text)">S14 / 32</span>
+    <div class="sep"></div>
+    <div class="legend">
+      <div class="leg-item"><div class="leg-dot" style="background:var(--green-l)"></div>Ejecutado</div>
+      <div class="leg-item"><div class="leg-dot" style="background:var(--amber-l)"></div>En curso</div>
+      <div class="leg-item"><div class="leg-dot" style="background:var(--red-l)"></div>Atrasado</div>
+      <div class="leg-item"><div class="leg-dot" style="background:var(--gray-l)"></div>Pendiente</div>
+    </div>
+  </div>
+
+  <div id="main">
+    <div id="canvas-wrap">
+      <canvas id="c"></canvas>
+
+      <div id="stats-bar">
+        <div class="stat-chip">
+          <div class="dot" style="background:var(--green-l)"></div>
+          <span class="val" id="s-done">0</span>
+          <span class="lbl">ej.</span>
+        </div>
+        <div class="stat-chip">
+          <div class="dot" style="background:var(--amber-l)"></div>
+          <span class="val" id="s-active">0</span>
+          <span class="lbl">en curso</span>
+        </div>
+        <div class="stat-chip">
+          <div class="dot" style="background:var(--red-l)"></div>
+          <span class="val" id="s-late">0</span>
+          <span class="lbl">atrasado</span>
+        </div>
+        <div class="stat-chip">
+          <div class="dot" style="background:var(--gray-l)"></div>
+          <span class="val" id="s-pend">0</span>
+          <span class="lbl">pend.</span>
+        </div>
+      </div>
+
+      <div id="hint">Arrastrar · rotar &nbsp;|&nbsp; Scroll · zoom &nbsp;|&nbsp; Click · detalle</div>
+    </div>
+
+    <div id="panel">
+      <div id="panel-empty" id="panel-empty-state">
+        <div class="icon">⬡</div>
+        <p>Selecciona una vivienda para ver el detalle de sus partidas</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const ACTIVITIES = [
+  ['Excavación','Sobrecimientos','Radier','Rellenos'],
+  ['Muros 1P','Escalera','Losa entrepiso','Cubierta'],
+  ['EESS 1P','AAEE 1P','EEMM 1P','Impermeab.'],
+  ['Yeso 1P','Pintura 1P','Pavim. 1P','Carpint. 1P'],
+  ['Muros 2P','Cubierta 2P','EESS 2P','AAEE 2P'],
+  ['Yeso 2P','Pintura 2P','Pavim. 2P','Carpint. 2P'],
+];
+const ROW_LABELS = ['F1 · Obras de tierra','F2 · Obra gruesa','F3 · Instalaciones','F4 · Terminaciones 1P','F5 · Obra gruesa 2P','F6 · Terminaciones 2P'];
+
+const ST_DONE=0, ST_ACTIVE=1, ST_LATE=2, ST_PEND=3;
+
+const COLORS_3D = {
+  [ST_DONE]:   0x3B6D11,
+  [ST_ACTIVE]: 0xBA7517,
+  [ST_LATE]:   0xA32D2D,
+  [ST_PEND]:   0x3a3f4a,
+};
+const COLORS_EMISSIVE = {
+  [ST_DONE]:   0x1a3a05,
+  [ST_ACTIVE]: 0x5a3500,
+  [ST_LATE]:   0x4a0808,
+  [ST_PEND]:   0x111318,
+};
+const COLORS_CSS = {
+  [ST_DONE]:   {bg:'rgba(59,109,17,0.18)',c:'#97C459'},
+  [ST_ACTIVE]: {bg:'rgba(186,117,23,0.18)',c:'#EF9F27'},
+  [ST_LATE]:   {bg:'rgba(163,45,45,0.18)',c:'#E24B4A'},
+  [ST_PEND]:   {bg:'rgba(58,63,74,0.35)',c:'#7c8494'},
+};
+
+const N_HOUSES = 24;
+const HOUSES_COLS = 6;
+
+function genHouse(id, week) {
+  const seed = id * 17 + 3;
+  const progress = (week / 32) + (((seed * 13) % 7) - 3) / 32;
+  const rows = 6, cols = 4;
+  const states = [];
+  for (let r = 0; r < rows; r++) {
+    const rowStates = [];
+    for (let c = 0; c < cols; c++) {
+      const idx = r * cols + c;
+      const threshold = (idx + 1) / (rows * cols);
+      const noise = (((seed + idx * 7) % 11) - 5) / (rows * cols * 2);
+      const val = progress - threshold + noise;
+      if (val > 0.08) rowStates.push(ST_DONE);
+      else if (val > -0.02) {
+        const n = (seed + idx * 3) % 10;
+        rowStates.push(n < 5 ? ST_ACTIVE : ST_LATE);
+      }
+      else rowStates.push(ST_PEND);
+    }
+    states.push(rowStates);
+  }
+  return states;
+}
+
+const canvas = document.getElementById('c');
+const wrap = document.getElementById('canvas-wrap');
+
+const renderer = new THREE.WebGLRenderer({canvas, antialias:true});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setClearColor(0x0d0f12, 1);
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.Fog(0x0d0f12, 35, 70);
+
+const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 200);
+
+const ambient = new THREE.AmbientLight(0xffffff, 0.5);
+scene.add(ambient);
+const dir = new THREE.DirectionalLight(0xffffff, 0.8);
+dir.position.set(10, 20, 10);
+scene.add(dir);
+const dir2 = new THREE.DirectionalLight(0x4488ff, 0.2);
+dir2.position.set(-10, 5, -10);
+scene.add(dir2);
+
+const CUBE_SIZE = 0.26;
+const CUBE_GAP  = 0.05;
+const HOUSE_PAD_X = 0.55;
+const HOUSE_PAD_Z = 0.65;
+const HOUSE_W = 4 * (CUBE_SIZE + CUBE_GAP);
+const HOUSE_H = 6 * (CUBE_SIZE + CUBE_GAP);
+
+const geo = new THREE.BoxGeometry(CUBE_SIZE, CUBE_SIZE, CUBE_SIZE);
+
+let currentWeek = 14;
+let selectedHouse = -1;
+const houseGroups = [];
+const houseMeshes = [];
+
+const baseGeo = new THREE.PlaneGeometry(1, 1);
+
+function buildHouses(week) {
+  houseGroups.forEach(g => scene.remove(g));
+  houseGroups.length = 0;
+  houseMeshes.length = 0;
+
+  let totalDone=0, totalActive=0, totalLate=0, totalPend=0;
+
+  for (let h = 0; h < N_HOUSES; h++) {
+    const col = h % HOUSES_COLS;
+    const row = Math.floor(h / HOUSES_COLS);
+    const states = genHouse(h, week);
+
+    const group = new THREE.Group();
+    group.position.x = col * (HOUSE_W + HOUSE_PAD_X);
+    group.position.z = row * (HOUSE_H + HOUSE_PAD_Z);
+
+    const meshesForHouse = [];
+
+    for (let r = 0; r < 6; r++) {
+      for (let c = 0; c < 4; c++) {
+        const st = states[r][c];
+        if (st === ST_DONE) totalDone++;
+        else if (st === ST_ACTIVE) totalActive++;
+        else if (st === ST_LATE) totalLate++;
+        else totalPend++;
+
+        const mat = new THREE.MeshLambertMaterial({
+          color: COLORS_3D[st],
+          emissive: COLORS_EMISSIVE[st],
+        });
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.position.x = c * (CUBE_SIZE + CUBE_GAP);
+        mesh.position.y = r * (CUBE_SIZE + CUBE_GAP);
+        mesh.position.z = 0;
+        mesh.userData = {houseId: h};
+        group.add(mesh);
+        meshesForHouse.push(mesh);
+      }
+    }
+
+    const isSelected = selectedHouse === h;
+    const planeMat = new THREE.MeshBasicMaterial({
+      color: isSelected ? 0x378ADD : 0x2a2f3a,
+      transparent: true,
+      opacity: isSelected ? 0.35 : 0.5,
+      side: THREE.DoubleSide,
+    });
+    const pw = HOUSE_W + 0.12, ph = HOUSE_H + 0.12;
+    const planeG = new THREE.PlaneGeometry(pw, ph);
+    const plane = new THREE.Mesh(planeG, planeMat);
+    plane.rotation.x = -Math.PI / 2;
+    plane.position.set(HOUSE_W/2 - CUBE_SIZE/2, -0.06, HOUSE_H/2 - CUBE_SIZE/2);
+    plane.userData = {houseId: h, isBase: true};
+    group.add(plane);
+
+    scene.add(group);
+    houseGroups.push(group);
+    houseMeshes.push({meshes: meshesForHouse, states, plane, planeMat});
+  }
+
+  document.getElementById('s-done').textContent = totalDone;
+  document.getElementById('s-active').textContent = totalActive;
+  document.getElementById('s-late').textContent = totalLate;
+  document.getElementById('s-pend').textContent = totalPend;
+}
+
+function resize() {
+  const w = wrap.clientWidth, h = wrap.clientHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+resize();
+new ResizeObserver(resize).observe(wrap);
+
+let theta = 0.5, phi = 0.62, radius = 26;
+const target = new THREE.Vector3(
+  (HOUSES_COLS - 1) * (HOUSE_W + HOUSE_PAD_X) / 2,
+  2,
+  (Math.ceil(N_HOUSES / HOUSES_COLS) - 1) * (HOUSE_H + HOUSE_PAD_Z) / 2
+);
+
+function updateCamera() {
+  camera.position.x = target.x + radius * Math.sin(phi) * Math.sin(theta);
+  camera.position.y = target.y + radius * Math.cos(phi);
+  camera.position.z = target.z + radius * Math.sin(phi) * Math.cos(theta);
+  camera.lookAt(target);
+}
+updateCamera();
+buildHouses(currentWeek);
+
+let isDragging = false, lastX = 0, lastY = 0;
+canvas.addEventListener('mousedown', e => {
+  isDragging = true; lastX = e.clientX; lastY = e.clientY;
+});
+window.addEventListener('mouseup', () => isDragging = false);
+window.addEventListener('mousemove', e => {
+  if (!isDragging) return;
+  const dx = e.clientX - lastX;
+  const dy = e.clientY - lastY;
+  theta -= dx * 0.007;
+  phi = Math.max(0.12, Math.min(1.45, phi + dy * 0.007));
+  lastX = e.clientX; lastY = e.clientY;
+  updateCamera();
+});
+canvas.addEventListener('wheel', e => {
+  radius = Math.max(6, Math.min(65, radius + e.deltaY * 0.04));
+  updateCamera();
+  e.preventDefault();
+}, {passive: false});
+
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+
+canvas.addEventListener('click', e => {
+  if (Math.abs(e.clientX - lastX) > 3) return;
+  const rect = canvas.getBoundingClientRect();
+  mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+  mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+  raycaster.setFromCamera(mouse, camera);
+  const all = [];
+  scene.traverse(o => { if (o.isMesh) all.push(o); });
+  const hits = raycaster.intersectObjects(all);
+  if (hits.length > 0) {
+    const hid = hits[0].object.userData.houseId;
+    if (hid !== undefined) {
+      selectedHouse = hid;
+      showPanel(hid);
+      houseMeshes.forEach((hm, i) => {
+        const sel = i === hid;
+        hm.planeMat.color.setHex(sel ? 0x378ADD : 0x2a2f3a);
+        hm.planeMat.opacity = sel ? 0.35 : 0.5;
+      });
+    }
+  }
+});
+
+function showPanel(hid) {
+  const {states} = houseMeshes[hid];
+  const col = hid % HOUSES_COLS + 1;
+  const row = Math.floor(hid / HOUSES_COLS) + 1;
+  const total = 24;
+
+  let done=0, active=0, late=0, pend=0;
+  states.flat().forEach(s => {
+    if(s===ST_DONE) done++;
+    else if(s===ST_ACTIVE) active++;
+    else if(s===ST_LATE) late++;
+    else pend++;
+  });
+
+  const pct = Math.round(done / total * 100);
+
+  let bodyHtml = '';
+  states.forEach((rowStates, ri) => {
+    bodyHtml += `<div class="row-section">
+      <div class="row-label">${ROW_LABELS[ri]}</div>
+      <div class="cube-grid">`;
+    rowStates.forEach((st, ci) => {
+      const {bg, c} = COLORS_CSS[st];
+      const name = ACTIVITIES[ri][ci];
+      bodyHtml += `<div class="cube-cell" style="background:${bg};color:${c}" title="${name}">${name}</div>`;
+    });
+    bodyHtml += `</div></div>`;
+  });
+
+  const panel = document.getElementById('panel');
+  panel.innerHTML = `
+    <div id="panel-header" style="padding:14px 16px 12px;border-bottom:1px solid var(--border)">
+      <div id="panel-id" style="font-family:'DM Mono',monospace;font-size:10px;color:var(--accent);letter-spacing:0.08em;margin-bottom:4px;text-transform:uppercase">
+        VIV · F${row}-C${col}
+      </div>
+      <div id="panel-title" style="font-size:15px;font-weight:500;color:var(--text)">
+        Vivienda fila ${row}, col ${col}
+      </div>
+      <div id="panel-pct" style="font-size:12px;color:var(--text2);margin-top:3px">
+        ${pct}% completado · Semana ${currentWeek}
+      </div>
+    </div>
+    <div id="panel-body" style="flex:1;overflow-y:auto;padding:12px 16px">
+      ${bodyHtml}
+    </div>
+    <div id="panel-footer" style="padding:12px 16px;border-top:1px solid var(--border);display:grid;grid-template-columns:repeat(4,1fr);gap:4px">
+      <div class="ft-stat" style="background:rgba(59,109,17,0.15)">
+        <span class="n" style="color:#97C459">${done}</span>
+        <span class="l" style="color:#3B6D11">ej.</span>
+      </div>
+      <div class="ft-stat" style="background:rgba(186,117,23,0.15)">
+        <span class="n" style="color:#EF9F27">${active}</span>
+        <span class="l" style="color:#BA7517">en curso</span>
+      </div>
+      <div class="ft-stat" style="background:rgba(163,45,45,0.15)">
+        <span class="n" style="color:#E24B4A">${late}</span>
+        <span class="l" style="color:#A32D2D">atras.</span>
+      </div>
+      <div class="ft-stat" style="background:rgba(58,63,74,0.3)">
+        <span class="n" style="color:#7c8494">${pend}</span>
+        <span class="l" style="color:#4a5060">pend.</span>
+      </div>
+    </div>
+  `;
+}
+
+document.getElementById('week-slider').addEventListener('input', function() {
+  currentWeek = parseInt(this.value);
+  document.getElementById('week-val').textContent = `S${currentWeek} / 32`;
+  buildHouses(currentWeek);
+  if (selectedHouse >= 0) showPanel(selectedHouse);
+});
+
+function animate() {
+  requestAnimationFrame(animate);
+  renderer.render(scene, camera);
+}
+animate();
+</script>
+</body>
+</html>
